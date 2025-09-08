@@ -10,12 +10,13 @@ from .subagents.worker_cause.agent import root_agent as worker_law_agent
 async def create_temporary_session_async(
         app_name: str,
         user_id: str,
+        session_id: str,
 ) -> InMemorySessionService:
     temp_service = InMemorySessionService()
     await temp_service.create_session(
         app_name=app_name,
         user_id=user_id,
-        session_id="default_session",
+        session_id=session_id,
     )
 
     return temp_service
