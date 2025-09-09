@@ -17,7 +17,7 @@ from agents.legal_dispatcher.agent import (
     create_runner_async,
     create_temporary_session_async,
 )
-from helpers.context_helpers import agent_context_var
+from helpers.context_helpers import get_context_var, set_context_var
 
 entrypoint = os.path.abspath(os.path.dirname(__file__))
 logger = logging.getLogger("server_logs")
@@ -69,21 +69,24 @@ async def query() -> Response:
     session_id = f"session://{request_username}"
     encoded_session_id = base64.b64encode(session_id.encode())
 
-    session_service = await create_temporary_session_async(
-        app_name=current_app.config["APP_NAME"],
-        user_id=encoded_request_username.decode(),
-        session_id=encoded_session_id.decode(),
-    )
-    logger.info("Temporary session created")
+    if not await get_context_var(encoded_session_id):
+        session_service = await create_temporary_session_async(
+            app_name=current_app.config["APP_NAME"],
+            user_id=encoded_request_username.decode(),
+            session_id=encoded_session_id.decode(),
+        )
+        await set_context_var(encoded_session_id, session_service)
 
-    if agent_context_var.get() is None:
+        logger.info("Temporary session created")
+
+    if await get_context_var("agent") is None:
         _agent = await create_root_agent_async()
-        agent_context_var.set(_agent)
+        await set_context_var("agent", _agent)
 
     runner = await create_runner_async(
         app_name=current_app.config["APP_NAME"],
-        session_service=session_service,
-        agent=agent_context_var.get(),
+        session_service=await get_context_var(encoded_session_id),
+        agent=await get_context_var("agent"),
     )
     logger.info("Runner created")
 

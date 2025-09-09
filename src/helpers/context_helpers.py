@@ -1,5 +1,14 @@
-from contextvars import ContextVar
+import typing
 
-from google.adk.agents import LlmAgent
+context_vars = {}
 
-agent_context_var: ContextVar[LlmAgent] = ContextVar("agent", default=None)
+
+async def set_context_var(key: str, value: typing.Any):
+    context_vars[key] = value
+
+
+async def get_context_var(key: str) -> typing.Any | None:
+    if key not in context_vars:
+        return None
+
+    return context_vars[key]
