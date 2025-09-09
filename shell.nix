@@ -11,3 +11,4 @@ pkgs.mkShell {
         echo "Welcome to Legal Assistant project!!!"
     '';
 }
+

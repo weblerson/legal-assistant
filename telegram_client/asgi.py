@@ -5,11 +5,11 @@ import sys
 
 import httpx
 
-from aiogram import Bot, Dispatcher, html
+from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
-from aiogram.filters import CommandStart
-from aiogram.types import Message
+from aiogram.filters import Command, CommandStart
+from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup
 
 from dotenv import load_dotenv
 
@@ -19,7 +19,16 @@ TOKEN = os.environ["BOT_TOKEN"]
 
 dp = Dispatcher()
 
+option_1 = KeyboardButton(text="Tope")
+option_2 = KeyboardButton(text="+500 aura")
 
+reply_keyboard = ReplyKeyboardMarkup(
+    resize_keyboard=True,
+    keyboard=[[option_1, option_2]],
+)
+
+
+# TODO: add feedback buttons
 @dp.message(CommandStart())
 async def command_start_handler(message: Message) -> None:
     """
@@ -34,6 +43,15 @@ async def command_start_handler(message: Message) -> None:
     )
 
     await message.answer(start_message.strip())
+
+
+@dp.message(Command("clear"))
+async def command_clear_handler(message: Message) -> None:
+    """
+    This handler receives messages `/clear` command
+    """
+
+    await message.answer("reseba!!!!", reply_markup=reply_keyboard)
 
 
 # TODO: implement session destruction handler
