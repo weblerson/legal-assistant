@@ -9,8 +9,8 @@ root_agent = Agent(
     instruction="""
         Your job is to answer questions about the civil law to the user.
 
-        Make sure to always reference your responses based on the
-        provided context
+        You must always call the `fetch_civil_law` tool to ground all
+        your responses.
     """,
     tools=[fetch_civil_law],
 )

@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 async def fetch_worker_law() -> str:
     """Returns the civil law of Brazil"""
 
-    url = os.environ.get("WORKER_LAW_URL")
+    url = os.environ.get("WORKER_CAUSE_URL")
     httpx_headers = httpx.Headers(
         {
             "User-Agent": (

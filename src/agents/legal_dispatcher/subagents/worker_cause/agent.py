@@ -9,8 +9,8 @@ root_agent = LlmAgent(
     instruction="""
         Your job is to answer questions about the worker law to the user.
 
-        Make sure to always reference your responses based on the
-        provided context
+        You must always call the `fetch_worker_law` tool to ground all
+        your responses.
     """,
     tools=[fetch_worker_law],
 )

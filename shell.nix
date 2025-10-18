@@ -6,6 +6,7 @@ pkgs.mkShell {
     buildInputs = [
         pkgs.uv
         pkgs.python312
+        pkgs.redis
     ];
     shellHook = ''
         echo "Welcome to Legal Assistant project!!!"
