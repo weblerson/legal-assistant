@@ -44,7 +44,11 @@ async def create_root_agent_async() -> LlmAgent:
         instruction="""
             Route user requests:
             Use Civil Law Agent for questions about the Brazilian civil law,
-            Penal Law Agent for questions about the Brazilian penal law.
+            Consumer Law Agent for questions about the Brazilian consumer law.
+            Worker Law Agent for questions about the Brazilian worker law.
+
+            For any other questions, reply that you are not able to respond
+            properly.
         """,
         description="Main entrypoint for legal questions",
         # allow_transfer=True is often implicit with sub_agents in AutoFlow

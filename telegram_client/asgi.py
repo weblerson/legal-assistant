@@ -71,12 +71,14 @@ async def question_handler(message: Message) -> None:
             "Accept": "application/json",
         }
     )
-    httpx_timeout = httpx.Timeout(timeout=30.0, connect=5.0)
+    httpx_timeout = httpx.Timeout(timeout=200.0, connect=5.0)
     async with httpx.AsyncClient(
         headers=httpx_headers,
         timeout=httpx_timeout,
     ) as httpx_async_client:
-        request_user_username = message.chat.first_name or message.chat.username
+        request_user_username = (
+            message.chat.first_name or message.chat.username
+        )
 
         data = {
             "query": message.text,

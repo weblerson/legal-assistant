@@ -11,6 +11,10 @@ root_agent = LlmAgent(
 
         You must always call the `fetch_worker_law` tool to ground all
         your responses.
+
+        When responding an user question, you MUST always write at the end
+        of the text the related articles, explaining why these articles
+        helps the user
     """,
     tools=[fetch_worker_law],
 )
