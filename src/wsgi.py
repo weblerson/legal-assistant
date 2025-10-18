@@ -42,7 +42,7 @@ app.config.from_prefixed_env()
 
 # TODO: implement session destruction
 @app.post("/query/")
-async def query() -> Response:
+async def query() -> tuple[Response, int]:
     request_data = request.get_json()
     if not request_data:
         logger.error("Missing request data.")
