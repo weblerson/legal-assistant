@@ -10,12 +10,13 @@ from .subagents.worker_cause.agent import root_agent as worker_law_agent
 async def create_temporary_session_async(
         app_name: str,
         user_id: str,
+        session_id: str,
 ) -> InMemorySessionService:
     temp_service = InMemorySessionService()
     await temp_service.create_session(
         app_name=app_name,
         user_id=user_id,
-        session_id="default_session",
+        session_id=session_id,
     )
 
     return temp_service
@@ -43,7 +44,11 @@ async def create_root_agent_async() -> LlmAgent:
         instruction="""
             Route user requests:
             Use Civil Law Agent for questions about the Brazilian civil law,
-            Penal Law Agent for questions about the Brazilian penal law.
+            Consumer Law Agent for questions about the Brazilian consumer law.
+            Worker Law Agent for questions about the Brazilian worker law.
+
+            For any other questions, reply that you are not able to respond
+            properly.
         """,
         description="Main entrypoint for legal questions",
         # allow_transfer=True is often implicit with sub_agents in AutoFlow

@@ -8,7 +8,7 @@ from bs4 import BeautifulSoup
 async def fetch_consumer_law() -> str:
     """Returns the civil law of Brazil"""
 
-    url = os.environ.get("CONSUMER_LAW_URL")
+    url = os.environ.get("CONSUMER_CAUSE_URL")
     httpx_headers = httpx.Headers(
         {
             "User-Agent": (

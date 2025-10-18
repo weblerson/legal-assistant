@@ -9,8 +9,12 @@ root_agent = LlmAgent(
     instruction="""
         Your job is to answer questions about the consumer law to the user.
 
-        Make sure to always reference your responses based on the
-        provided context
+        You must always call the `fetch_consumer_law` tool to ground all
+        your responses.
+
+        When responding an user question, you MUST always write at the end
+        of the text the related articles, explaining why these articles
+        helps the user
     """,
     tools=[fetch_consumer_law],
 )
