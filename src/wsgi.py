@@ -12,12 +12,22 @@ from flask import (
 )
 from google.genai import types
 
+from google.adk.agents import LlmAgent
+from google.genai import errors as google_exceptions
+
 from agents.legal_dispatcher.agent import (
     create_root_agent_async,
     create_runner_async,
-    create_temporary_session_async,
+
+    instantiate_database_session_service,
+    create_session_async,
+    retrieve_session_async,
 )
-from helpers.context_helpers import get_context_var, set_context_var
+from helpers.context_helpers import (
+    ContextKey,
+    get_context_var,
+    set_context_var,
+)
 
 entrypoint = os.path.abspath(os.path.dirname(__file__))
 logger = logging.getLogger("server_logs")
@@ -38,6 +48,8 @@ load_dotenv()
 
 app = Flask(__name__)
 app.config.from_prefixed_env()
+
+AGENT_KEY = ContextKey[LlmAgent]("agent")
 
 
 # TODO: implement session destruction
@@ -69,45 +81,95 @@ async def query() -> tuple[Response, int]:
     session_id = f"session://{request_username}"
     encoded_session_id = base64.b64encode(session_id.encode())
 
-    if not await get_context_var(encoded_session_id):
-        session_service = await create_temporary_session_async(
-            app_name=current_app.config["APP_NAME"],
-            user_id=encoded_request_username.decode(),
-            session_id=encoded_session_id.decode(),
+    db_url: str = current_app.config["DB_URL"]
+    app_name: str = current_app.config["APP_NAME"]
+    user_id = encoded_request_username.decode()
+    session_id = encoded_session_id.decode()
+    database_session_service = await instantiate_database_session_service(
+        db_url,
+    )
+
+    session = await retrieve_session_async(
+        database_session_service,
+        app_name,
+        user_id,
+        session_id,
+    )
+    if session is None:
+        session = await create_session_async(
+            database_session_service,
+            app_name,
+            user_id,
+            session_id,
         )
-        await set_context_var(encoded_session_id, session_service)
 
-        logger.info("Temporary session created")
-
-    if await get_context_var("agent") is None:
+    agent: LlmAgent | None = await get_context_var(AGENT_KEY)
+    if agent is None:
         _agent = await create_root_agent_async()
-        await set_context_var("agent", _agent)
+        await set_context_var(AGENT_KEY, _agent)
+
+        agent = _agent
 
     runner = await create_runner_async(
-        app_name=current_app.config["APP_NAME"],
-        session_service=await get_context_var(encoded_session_id),
-        agent=await get_context_var("agent"),
+        app_name=app_name,
+        session_service=database_session_service,
+        agent=agent,
     )
     logger.info("Runner created")
 
     user_query = request_data["query"]
     content = types.Content(role="user", parts=[types.Part(text=user_query)])
 
-    async for event in runner.run_async(
-        user_id=encoded_request_username.decode(),
-        session_id=encoded_session_id.decode(),
-        new_message=content,
-    ):
-        logger.info(f"Event received: {event}")
+    try:
+        async for event in runner.run_async(
+            user_id=encoded_request_username.decode(),
+            session_id=encoded_session_id.decode(),
+            new_message=content,
+        ):
+            logger.info(f"Event received: {event}")
 
-        if event.is_final_response():
-            final_response = event.content.parts[0].text
-            data = {
-                "response": final_response,
+            if event.is_final_response():
+                final_response = event.content.parts[0].text
+                data = {
+                    "response": final_response,
+                }
+                logger.info(f"Final model's response: {final_response}")
+
+                return jsonify(data), 200
+
+    # TODO: invest in better error handling
+    except google_exceptions.ServerError:
+        import traceback
+
+        response = {
+            "response": "Internal Server Error",
+        }
+        logger.error(traceback.format_exc())
+
+        return jsonify(response), 500
+
+    except google_exceptions.ClientError as e:
+        import traceback
+
+        response = {
+            "response": "Client error."
+        }
+
+        # TODO: this should try again
+        if e.code == 400:
+            response = {
+                "response": "The request was invalid."
             }
-            logger.info(f"Final model's response: {final_response}")
 
-            return jsonify(data), 200
+        # TODO: this should clean session and try again
+        elif e.code == 429:
+            response = {
+                "response": "Limit quota exceeded",
+            }
+
+        logger.error(traceback.format_exc())
+
+        return jsonify(response), 429
 
 
 if __name__ == "__main__":
@@ -119,7 +181,11 @@ if __name__ == "__main__":
             host: str = current_app.config["HOST"]
             port: str = current_app.config["PORT"]
 
-            app.run(debug=debug, host=host, port=port)
+            app.run(
+                debug=debug,
+                host=host,
+                port=int(port),
+            )
 
         except KeyboardInterrupt:
             logger.info("Server stopped by user")
