@@ -35,6 +35,8 @@ from helpers.sessions import (
     set_user_id,
 )
 
+from helpers.rag import instantiate_rag_object, retrieve_chunks
+
 entrypoint = os.path.abspath(os.path.dirname(__file__))
 logger = logging.getLogger("server_logs")
 logger.setLevel(logging.INFO)
@@ -84,7 +86,7 @@ async def query() -> tuple[Response, int]:
     request_user_id = request_data["user_id"]
 
     # TODO: put these arguments into the environment
-    redis_client = await instantiate_redis_client("localhost", 6379)
+    redis_client = await instantiate_redis_client("localhost", 6380)
     user_id = await retrieve_user_id(request_user_id, redis_client)
     if user_id is None:
         user_id = await set_user_id(request_user_id, request_username, redis_client)
@@ -125,17 +127,53 @@ async def query() -> tuple[Response, int]:
     )
     logger.info("Runner created")
 
-    user_query = request_data["query"]
-    content = types.Content(role="user", parts=[types.Part(text=user_query)])
-
     try:
+        ragflow_api_key = os.environ["RAGFLOW_API_KEY"]
+        ragflow_base_url = os.environ["RAGFLOW_BASE_URL"]
+        law_dataset_name = os.environ["LAW_DATASET_NAME"]
+
+        prompt_template = (
+            "{user_query}\n\n"
+            "Please, use the provided context below to provide "
+            "a better response to the user.\n\n"
+            "{chunks}"
+        )
+
+        user_query = request_data["query"]
+
+        rag_object = await instantiate_rag_object(
+            api_key=ragflow_api_key,
+            base_url=ragflow_base_url,
+        )
+        chunks = await retrieve_chunks(
+            law_dataset_name,
+            user_query,
+            rag_object,
+        )
+
+        formatted_chunks = ""
+        for i, chunk in enumerate(chunks):
+            from ragflow_sdk import Chunk
+
+            formatted_text = f"Chunk #{i+1}\n{chunk.content}\n\n"
+            formatted_chunks += formatted_text
+
+        final_prompt = prompt_template.format(
+            user_query=user_query,
+            chunks=formatted_chunks,
+        )
+
+        content = types.Content(
+            role="user",
+            parts=[types.Part(text=final_prompt)]
+        )
+        logger.info(f"Final prompt:\n{final_prompt}")
+
         async for event in runner.run_async(
             user_id=user_id,
             session_id=session_id,
             new_message=content,
         ):
-            logger.info(f"Event received: {event}")
-
             if event.is_final_response():
                 final_response = event.content.parts[0].text
                 data = {
@@ -173,6 +211,15 @@ async def query() -> tuple[Response, int]:
             response = {
                 "response": "The request was invalid."
             }
+
+            await pop_user_id(user_id, redis_client)
+
+            await delete_session_async(
+                database_session_service,
+                app_name,
+                user_id,
+                session_id,
+            )
 
         # TODO: this should clean session and try again
         elif e.code == 429:

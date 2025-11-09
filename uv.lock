@@ -194,6 +194,15 @@ wheels = [
 ]
 
 [[package]]
+name = "beartype"
+version = "0.18.5"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/96/15/4e623478a9628ad4cee2391f19aba0b16c1dd6fedcb2a399f0928097b597/beartype-0.18.5.tar.gz", hash = "sha256:264ddc2f1da9ec94ff639141fbe33d22e12a9f75aa863b83b7046ffff1381927", size = 1193506, upload-time = "2024-04-21T07:25:58.64Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/64/43/7a1259741bd989723272ac7d381a43be932422abcff09a1d9f7ba212cb74/beartype-0.18.5-py3-none-any.whl", hash = "sha256:5301a14f2a9a5540fe47ec6d34d758e9cd8331d36c4760fc7a5499ab86310089", size = 917762, upload-time = "2024-04-21T07:25:55.758Z" },
+]
+
+[[package]]
 name = "beautifulsoup4"
 version = "4.13.4"
 source = { registry = "https://pypi.org/simple" }
@@ -1270,6 +1279,7 @@ dependencies = [
     { name = "google-adk" },
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
+    { name = "ragflow-sdk" },
     { name = "redis" },
 ]
 
@@ -1282,6 +1292,7 @@ requires-dist = [
     { name = "google-adk", specifier = ">=1.9.0" },
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.12.3" },
+    { name = "ragflow-sdk", specifier = ">=0.21.1" },
     { name = "redis", specifier = ">=7.0.1" },
 ]
 
@@ -2054,6 +2065,19 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/fe/0f/25911a9f080464c59fab9027482f822b86bf0608957a5fcc6eaac85aa515/PyYAML-6.0.2-cp313-cp313-musllinux_1_1_x86_64.whl", hash = "sha256:68ccc6023a3400877818152ad9a1033e3db8625d899c72eacb5a668902e4d652", size = 751597, upload-time = "2024-08-06T20:32:56.985Z" },
     { url = "https://files.pythonhosted.org/packages/14/0d/e2c3b43bbce3cf6bd97c840b46088a3031085179e596d4929729d8d68270/PyYAML-6.0.2-cp313-cp313-win32.whl", hash = "sha256:bc2fa7c6b47d6bc618dd7fb02ef6fdedb1090ec036abab80d4681424b84c1183", size = 140527, upload-time = "2024-08-06T20:33:03.001Z" },
     { url = "https://files.pythonhosted.org/packages/fa/de/02b54f42487e3d3c6efb3f89428677074ca7bf43aae402517bc7cca949f3/PyYAML-6.0.2-cp313-cp313-win_amd64.whl", hash = "sha256:8388ee1976c416731879ac16da0aff3f63b286ffdd57cdeb95f3f2e085687563", size = 156446, upload-time = "2024-08-06T20:33:04.33Z" },
+]
+
+[[package]]
+name = "ragflow-sdk"
+version = "0.21.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "beartype" },
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/95/a8/2a554751d64f4c2109c0e783aad598c16ce685e9563e3aac82c1523853dc/ragflow_sdk-0.21.1.tar.gz", hash = "sha256:c6d2f36e54fa196425b8f371c11aa6a5bd16923f610cff34457e874c9ce2f366", size = 8572, upload-time = "2025-10-23T12:00:20.041Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/85/5a/e2ce59a461033b94da25740633daa842c04d663017bd48b2e70322eac09c/ragflow_sdk-0.21.1-py3-none-any.whl", hash = "sha256:1341fb44cc668d552b3b9f61fadb436ed6878761f4d33bf5a56427ef2b6f6d96", size = 15178, upload-time = "2025-10-23T12:00:19.214Z" },
 ]
 
 [[package]]
