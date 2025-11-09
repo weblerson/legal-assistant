@@ -61,6 +61,19 @@ async def create_session_async(
     return created_session
 
 
+async def delete_session_async(
+        database_session_service: DatabaseSessionService,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+) -> None:
+    await database_session_service.delete_session(
+        app_name=app_name,
+        user_id=user_id,
+        session_id=session_id,
+    )
+
+
 async def create_runner_async(
         app_name: str,
         session_service: BaseSessionService,

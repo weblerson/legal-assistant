@@ -18,15 +18,21 @@ from google.genai import errors as google_exceptions
 from agents.legal_dispatcher.agent import (
     create_root_agent_async,
     create_runner_async,
-
-    instantiate_database_session_service,
     create_session_async,
+    delete_session_async,
+    instantiate_database_session_service,
     retrieve_session_async,
 )
 from helpers.context_helpers import (
     ContextKey,
     get_context_var,
     set_context_var,
+)
+from helpers.sessions import (
+    instantiate_redis_client,
+    pop_user_id,
+    retrieve_user_id,
+    set_user_id,
 )
 
 entrypoint = os.path.abspath(os.path.dirname(__file__))
@@ -52,7 +58,6 @@ app.config.from_prefixed_env()
 AGENT_KEY = ContextKey[LlmAgent]("agent")
 
 
-# TODO: implement session destruction
 @app.post("/query/")
 async def query() -> tuple[Response, int]:
     request_data = request.get_json()
@@ -67,8 +72,8 @@ async def query() -> tuple[Response, int]:
 
         return jsonify({"error": "Missing request data."}), 400
 
-    if not request_data or "username" not in request_data:
-        logger.error("Missing 'username' in request data")
+    if not request_data or "username" not in request_data or "user_id" not in request_data:
+        logger.error("Missing request data")
         logger.error(f"Request data: {request_data}")
 
         return jsonify({"error": "Missing request data."}), 400
@@ -76,15 +81,18 @@ async def query() -> tuple[Response, int]:
     logger.info(f"Received query: {request_data['query']}")
 
     request_username = request_data["username"]
-    encoded_request_username = base64.b64encode(request_username.encode())
+    request_user_id = request_data["user_id"]
 
-    session_id = f"session://{request_username}"
-    encoded_session_id = base64.b64encode(session_id.encode())
+    # TODO: put these arguments into the environment
+    redis_client = await instantiate_redis_client("localhost", 6379)
+    user_id = await retrieve_user_id(request_user_id, redis_client)
+    if user_id is None:
+        user_id = await set_user_id(request_user_id, request_username, redis_client)
+
+    session_id = f"session://{user_id}"
 
     db_url: str = current_app.config["DB_URL"]
     app_name: str = current_app.config["APP_NAME"]
-    user_id = encoded_request_username.decode()
-    session_id = encoded_session_id.decode()
     database_session_service = await instantiate_database_session_service(
         db_url,
     )
@@ -122,8 +130,8 @@ async def query() -> tuple[Response, int]:
 
     try:
         async for event in runner.run_async(
-            user_id=encoded_request_username.decode(),
-            session_id=encoded_session_id.decode(),
+            user_id=user_id,
+            session_id=session_id,
             new_message=content,
         ):
             logger.info(f"Event received: {event}")
@@ -136,6 +144,11 @@ async def query() -> tuple[Response, int]:
                 logger.info(f"Final model's response: {final_response}")
 
                 return jsonify(data), 200
+
+        response = {"error": "No final response received from agent."}
+
+        logger.warning("Runner finished without a final response event.")
+        return jsonify(response), 500
 
     # TODO: invest in better error handling
     except google_exceptions.ServerError:
@@ -167,9 +180,26 @@ async def query() -> tuple[Response, int]:
                 "response": "Limit quota exceeded",
             }
 
+            await pop_user_id(user_id, redis_client)
+
+            await delete_session_async(
+                database_session_service,
+                app_name,
+                user_id,
+                session_id,
+            )
+
         logger.error(traceback.format_exc())
 
         return jsonify(response), 429
+
+    except Exception as e:
+        import traceback
+
+        # Catch-all for unexpected errors to ensure a tuple is always returned
+        logger.error(f"Unexpected error: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
 
 if __name__ == "__main__":
