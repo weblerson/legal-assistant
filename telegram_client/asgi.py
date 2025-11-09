@@ -79,10 +79,12 @@ async def question_handler(message: Message) -> None:
         request_user_username = (
             message.chat.first_name or message.chat.username
         )
+        request_user_user_id = message.chat.id
 
         data = {
             "query": message.text,
             "username": request_user_username,
+            "user_id": request_user_user_id,
         }
 
         response: httpx.Response = await httpx_async_client.post(

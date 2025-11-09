@@ -12,12 +12,28 @@ from flask import (
 )
 from google.genai import types
 
+from google.adk.agents import LlmAgent
+from google.genai import errors as google_exceptions
+
 from agents.legal_dispatcher.agent import (
     create_root_agent_async,
     create_runner_async,
-    create_temporary_session_async,
+    create_session_async,
+    delete_session_async,
+    instantiate_database_session_service,
+    retrieve_session_async,
 )
-from helpers.context_helpers import get_context_var, set_context_var
+from helpers.context_helpers import (
+    ContextKey,
+    get_context_var,
+    set_context_var,
+)
+from helpers.sessions import (
+    instantiate_redis_client,
+    pop_user_id,
+    retrieve_user_id,
+    set_user_id,
+)
 
 entrypoint = os.path.abspath(os.path.dirname(__file__))
 logger = logging.getLogger("server_logs")
@@ -39,8 +55,9 @@ load_dotenv()
 app = Flask(__name__)
 app.config.from_prefixed_env()
 
+AGENT_KEY = ContextKey[LlmAgent]("agent")
 
-# TODO: implement session destruction
+
 @app.post("/query/")
 async def query() -> tuple[Response, int]:
     request_data = request.get_json()
@@ -55,8 +72,8 @@ async def query() -> tuple[Response, int]:
 
         return jsonify({"error": "Missing request data."}), 400
 
-    if not request_data or "username" not in request_data:
-        logger.error("Missing 'username' in request data")
+    if not request_data or "username" not in request_data or "user_id" not in request_data:
+        logger.error("Missing request data")
         logger.error(f"Request data: {request_data}")
 
         return jsonify({"error": "Missing request data."}), 400
@@ -64,50 +81,125 @@ async def query() -> tuple[Response, int]:
     logger.info(f"Received query: {request_data['query']}")
 
     request_username = request_data["username"]
-    encoded_request_username = base64.b64encode(request_username.encode())
+    request_user_id = request_data["user_id"]
 
-    session_id = f"session://{request_username}"
-    encoded_session_id = base64.b64encode(session_id.encode())
+    # TODO: put these arguments into the environment
+    redis_client = await instantiate_redis_client("localhost", 6379)
+    user_id = await retrieve_user_id(request_user_id, redis_client)
+    if user_id is None:
+        user_id = await set_user_id(request_user_id, request_username, redis_client)
 
-    if not await get_context_var(encoded_session_id):
-        session_service = await create_temporary_session_async(
-            app_name=current_app.config["APP_NAME"],
-            user_id=encoded_request_username.decode(),
-            session_id=encoded_session_id.decode(),
+    session_id = f"session://{user_id}"
+
+    db_url: str = current_app.config["DB_URL"]
+    app_name: str = current_app.config["APP_NAME"]
+    database_session_service = await instantiate_database_session_service(
+        db_url,
+    )
+
+    session = await retrieve_session_async(
+        database_session_service,
+        app_name,
+        user_id,
+        session_id,
+    )
+    if session is None:
+        session = await create_session_async(
+            database_session_service,
+            app_name,
+            user_id,
+            session_id,
         )
-        await set_context_var(encoded_session_id, session_service)
 
-        logger.info("Temporary session created")
-
-    if await get_context_var("agent") is None:
+    agent: LlmAgent | None = await get_context_var(AGENT_KEY)
+    if agent is None:
         _agent = await create_root_agent_async()
-        await set_context_var("agent", _agent)
+        await set_context_var(AGENT_KEY, _agent)
+
+        agent = _agent
 
     runner = await create_runner_async(
-        app_name=current_app.config["APP_NAME"],
-        session_service=await get_context_var(encoded_session_id),
-        agent=await get_context_var("agent"),
+        app_name=app_name,
+        session_service=database_session_service,
+        agent=agent,
     )
     logger.info("Runner created")
 
     user_query = request_data["query"]
     content = types.Content(role="user", parts=[types.Part(text=user_query)])
 
-    async for event in runner.run_async(
-        user_id=encoded_request_username.decode(),
-        session_id=encoded_session_id.decode(),
-        new_message=content,
-    ):
-        logger.info(f"Event received: {event}")
+    try:
+        async for event in runner.run_async(
+            user_id=user_id,
+            session_id=session_id,
+            new_message=content,
+        ):
+            logger.info(f"Event received: {event}")
 
-        if event.is_final_response():
-            final_response = event.content.parts[0].text
-            data = {
-                "response": final_response,
+            if event.is_final_response():
+                final_response = event.content.parts[0].text
+                data = {
+                    "response": final_response,
+                }
+                logger.info(f"Final model's response: {final_response}")
+
+                return jsonify(data), 200
+
+        response = {"error": "No final response received from agent."}
+
+        logger.warning("Runner finished without a final response event.")
+        return jsonify(response), 500
+
+    # TODO: invest in better error handling
+    except google_exceptions.ServerError:
+        import traceback
+
+        response = {
+            "response": "Internal Server Error",
+        }
+        logger.error(traceback.format_exc())
+
+        return jsonify(response), 500
+
+    except google_exceptions.ClientError as e:
+        import traceback
+
+        response = {
+            "response": "Client error."
+        }
+
+        # TODO: this should try again
+        if e.code == 400:
+            response = {
+                "response": "The request was invalid."
             }
-            logger.info(f"Final model's response: {final_response}")
 
-            return jsonify(data), 200
+        # TODO: this should clean session and try again
+        elif e.code == 429:
+            response = {
+                "response": "Limit quota exceeded",
+            }
+
+            await pop_user_id(user_id, redis_client)
+
+            await delete_session_async(
+                database_session_service,
+                app_name,
+                user_id,
+                session_id,
+            )
+
+        logger.error(traceback.format_exc())
+
+        return jsonify(response), 429
+
+    except Exception as e:
+        import traceback
+
+        # Catch-all for unexpected errors to ensure a tuple is always returned
+        logger.error(f"Unexpected error: {e}")
+        logger.error(traceback.format_exc())
+        return jsonify({"error": "An unexpected error occurred."}), 500
 
 
 if __name__ == "__main__":
@@ -119,7 +211,11 @@ if __name__ == "__main__":
             host: str = current_app.config["HOST"]
             port: str = current_app.config["PORT"]
 
-            app.run(debug=debug, host=host, port=port)
+            app.run(
+                debug=debug,
+                host=host,
+                port=int(port),
+            )
 
         except KeyboardInterrupt:
             logger.info("Server stopped by user")

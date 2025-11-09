@@ -1,5 +1,11 @@
+import typing
+
 from google.adk.agents import LlmAgent
-from google.adk.sessions import InMemorySessionService
+from google.adk.sessions import (
+    BaseSessionService,
+    DatabaseSessionService,
+    Session,
+)
 from google.adk.runners import Runner
 
 from .subagents.civil_cause.agent import root_agent as civil_law_agent
@@ -7,24 +13,70 @@ from .subagents.consumer_cause.agent import root_agent as consumer_law_agent
 from .subagents.worker_cause.agent import root_agent as worker_law_agent
 
 
-async def create_temporary_session_async(
+async def instantiate_database_session_service(
+        db_url: str,
+) -> DatabaseSessionService:
+    return DatabaseSessionService(db_url)
+
+
+async def retrieve_session_async(
+        database_service: DatabaseSessionService,
         app_name: str,
         user_id: str,
         session_id: str,
-) -> InMemorySessionService:
-    temp_service = InMemorySessionService()
-    await temp_service.create_session(
+) -> typing.Optional[Session]:
+    session = await database_service.get_session(
         app_name=app_name,
         user_id=user_id,
         session_id=session_id,
     )
 
-    return temp_service
+    if session is None:
+        return None
+
+    return session
+
+
+async def create_session_async(
+        database_service: DatabaseSessionService,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+) -> Session:
+    await database_service.create_session(
+        app_name=app_name,
+        user_id=user_id,
+        session_id=session_id,
+    )
+
+    created_session = await retrieve_session_async(
+        database_service=database_service,
+        app_name=app_name,
+        user_id=user_id,
+        session_id=session_id,
+    )
+    if created_session is None:
+        raise ValueError("Something went wrong when creating a new session.")
+
+    return created_session
+
+
+async def delete_session_async(
+        database_session_service: DatabaseSessionService,
+        app_name: str,
+        user_id: str,
+        session_id: str,
+) -> None:
+    await database_session_service.delete_session(
+        app_name=app_name,
+        user_id=user_id,
+        session_id=session_id,
+    )
 
 
 async def create_runner_async(
         app_name: str,
-        session_service: InMemorySessionService,
+        session_service: BaseSessionService,
         agent: LlmAgent,
 ) -> Runner:
     runner = Runner(

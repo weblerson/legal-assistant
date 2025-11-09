@@ -6,6 +6,7 @@ pkgs.mkShell {
     buildInputs = [
         pkgs.uv
         pkgs.python312
+        pkgs.sqlitebrowser
         pkgs.redis
     ];
     shellHook = ''
