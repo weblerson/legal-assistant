@@ -9,12 +9,8 @@ root_agent = Agent(
     instruction="""
         Your job is to answer questions about the civil law to the user.
 
-        You must always call the `fetch_civil_law` tool to ground all
-        your responses.
-
         When responding an user question, you MUST always write at the end
         of the text the related articles, explaining why these articles
         helps the user.
     """,
-    tools=[fetch_civil_law],
 )

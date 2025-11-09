@@ -1,6 +1,7 @@
 #
 .wwebjs_cache/*
 *.rdb
+**/laws/*
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
