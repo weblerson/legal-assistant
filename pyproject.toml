@@ -15,12 +15,3 @@ dependencies = [
     "ragflow-sdk>=0.21.1",
     "redis>=7.0.1",
 ]
-
-[tool.uv.workspace]
-members = [
-    "server",
-    "telegram_client",
-]
-
-[tool.uv.sources]
-agents = { workspace = true }
