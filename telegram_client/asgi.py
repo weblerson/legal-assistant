@@ -9,7 +9,7 @@ from aiogram import Bot, Dispatcher
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup
+from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, MenuButton, BotCommand
 
 from dotenv import load_dotenv
 
@@ -22,9 +22,12 @@ dp = Dispatcher()
 option_1 = KeyboardButton(text="Tope")
 option_2 = KeyboardButton(text="+500 aura")
 
+clear_session_button = KeyboardButton(text="/clear")
+
 reply_keyboard = ReplyKeyboardMarkup(
     resize_keyboard=True,
-    keyboard=[[option_1, option_2]],
+    input_field_placeholder="Limpar chat",
+    keyboard=[[clear_session_button]],
 )
 
 
@@ -51,7 +54,44 @@ async def command_clear_handler(message: Message) -> None:
     This handler receives messages `/clear` command
     """
 
-    await message.answer("reseba!!!!", reply_markup=reply_keyboard)
+    server_url = "http://localhost:5000/clear/"
+
+    httpx_headers = httpx.Headers(
+        headers={
+            "Content-Type": "application/json",
+            "Accept": "application/json",
+        }
+    )
+    httpx_timeout = httpx.Timeout(timeout=200.0, connect=5.0)
+    async with httpx.AsyncClient(
+        headers=httpx_headers,
+        timeout=httpx_timeout,
+    ) as httpx_async_client:
+        request_user_user_id = message.chat.id
+
+        params = {
+            "user_id": request_user_user_id,
+        }
+
+        try:
+            response: httpx.Response = await httpx_async_client.delete(
+                server_url,
+                params=params,
+            )
+            if response.status_code == 200:
+                await message.answer(
+                    "Sessão limpa! 🧹\nPodemos começar de novo.",
+                )
+            else:
+                # Tell the user it failed
+                await message.answer(
+                    "Ocorreu um erro ao tentar limpar a sessão no servidor.",
+                )
+
+        except httpx.ConnectError:
+            await message.answer(
+                "Não consegui me conectar ao servidor para limpar a sessão.",
+            )
 
 
 # TODO: implement session destruction handler
@@ -102,6 +142,19 @@ async def main_async() -> None:
         token=TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
     )
+
+    commands = [
+        BotCommand(
+            command="clear",
+            description="Limpar chat"
+        ),
+        BotCommand(
+            command="rate",
+            description="Avaliar",
+        )
+    ]
+
+    await bot.set_my_commands(commands)
 
     # And the run events dispatching
     await dp.start_polling(bot)
