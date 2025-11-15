@@ -4,14 +4,20 @@ version = "0.1.0"
 description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.11"
-dependencies = [
-    "aiogram>=3.22.0",
-    "beautifulsoup4>=4.13.4",
-    "fastmcp>=2.11.0",
+dependencies = []
+
+[project.optional-dependencies]
+server = [
     "flask[async]>=3.1.1",
     "google-adk>=1.9.0",
-    "httpx>=0.28.1",
-    "mcp[cli]>=1.12.3",
+    "gunicorn>=23.0.0",
+    "psycopg2-binary>=2.9.11",
     "ragflow-sdk>=0.21.1",
     "redis>=7.0.1",
+    "uvicorn>=0.35.0"
+]
+telegram-client = [
+    "aiogram>=3.22.0",
+    "httpx>=0.28.1",
+    "python-dotenv>=1.1.1"
 ]

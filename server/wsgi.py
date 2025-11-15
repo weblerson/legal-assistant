@@ -85,10 +85,21 @@ async def query() -> tuple[Response, int]:
     request_user_id = request_data["user_id"]
 
     # TODO: put these arguments into the environment
-    redis_client = await instantiate_redis_client("localhost", 6380)
-    user_id = await retrieve_user_id(request_user_id, redis_client)
-    if user_id is None:
-        user_id = await set_user_id(request_user_id, request_username, redis_client)
+    redis_host = os.environ["REDIS_HOST"]
+    redis_port = os.environ["REDIS_PORT"]
+
+    redis_client = await instantiate_redis_client(redis_host, int(redis_port))
+    user_id_bytes = await retrieve_user_id(request_user_id, redis_client)
+    if user_id_bytes is None:
+        user_id_bytes = await set_user_id(
+            request_user_id,
+            request_username,
+            redis_client,
+        )
+
+    user_id = user_id_bytes.decode("utf-8")
+    if user_id.startswith("b'") and user_id.endswith("'"):
+        user_id = user_id[2:-1]
 
     session_id = f"session://{user_id}"
 
@@ -244,6 +255,11 @@ async def query() -> tuple[Response, int]:
         logger.error(f"Unexpected error: {e}")
         logger.error(traceback.format_exc())
         return jsonify({"error": "An unexpected error occurred."}), 500
+
+
+@app.get("/healthcheck/")
+async def healthcheck():
+    return jsonify({"status": "ok"}), 200
 
 
 if __name__ == "__main__":

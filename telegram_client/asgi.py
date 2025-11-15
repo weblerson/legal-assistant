@@ -53,8 +53,8 @@ async def command_clear_handler(message: Message) -> None:
     """
     This handler receives messages `/clear` command
     """
-
-    server_url = "http://localhost:5000/clear/"
+    server_host = os.environ["SERVER_HOST"]
+    server_url = f"{server_host}/clear/"
 
     httpx_headers = httpx.Headers(
         headers={
@@ -103,7 +103,8 @@ async def question_handler(message: Message) -> None:
     and send back to the client the response.
     """
 
-    server_url = "http://localhost:5000/query/"
+    server_host = os.environ["SERVER_HOST"]
+    server_url = f"{server_host}/query/"
 
     httpx_headers = httpx.Headers(
         headers={
@@ -132,6 +133,7 @@ async def question_handler(message: Message) -> None:
             json=data
         )
         response_json = response.json()
+        print(response_json, end="\n\n\n")
 
         await message.answer(response_json["response"])
 
