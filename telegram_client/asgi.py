@@ -120,9 +120,9 @@ async def show_rate(message: Message):
 async def process_rating(callback: CallbackQuery):
     rating_key = callback.data.split("_")[1]
     rating_map = {
-        "bad": 1,
-        "good": 3,
-        "excellent": 5,
+        "bad": "Ruim",
+        "good": "Bom",
+        "excellent": "Excelente",
     }
 
     rating_value = rating_map.get(rating_key, 0)
@@ -134,7 +134,7 @@ async def process_rating(callback: CallbackQuery):
 
     payload = {
         "request_user_id": request_user_id,
-        "rating": rating_value,
+        "rating": rating_key,
     }
     async with httpx.AsyncClient() as client:
         try:

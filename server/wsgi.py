@@ -64,6 +64,18 @@ app.config.from_prefixed_env()
 AGENT_KEY = ContextKey[LlmAgent]("agent")
 
 
+def _get_db_connection():
+    # TODO: host is not on the environment
+    return psycopg2.connect(
+        host="postgres",
+        database=os.environ["POSTGRES_DB"],
+        user=os.environ["POSTGRES_USER"],
+        password=os.environ["POSTGRES_PASSWORD"],
+        port=5432
+    )
+    # TODO: port is not too
+
+
 @app.post("/query/")
 async def query() -> tuple[Response, int]:
     request_data = request.get_json()
@@ -309,23 +321,7 @@ async def rate_interaction():
     request_user_id = request_data["request_user_id"]
     rating = request_data["rating"]
 
-    try:
-        rating = int(rating)
-    except ValueError:
-        return jsonify({"error": "Rating must be an integer"}), 400
-
     logger.info(f"Received rating {rating} from user {request_user_id}")
-
-    def _get_db_connection():
-        # TODO: host is not on the environment
-        return psycopg2.connect(
-            host="postgres",
-            database=os.environ["POSTGRES_DB"],
-            user=os.environ["POSTGRES_USER"],
-            password=os.environ["POSTGRES_PASSWORD"],
-            port=5432
-        )
-        # TODO: port is not too
 
     upsert_query = """
     INSERT INTO users_rate_tb (request_user_id, rating)
@@ -349,6 +345,65 @@ async def rate_interaction():
         import traceback
         logger.error(traceback.format_exc())
         return jsonify({"error": "Failed to save rating"}), 500
+
+
+@app.get("/api/get-ratings")
+async def get_ratings():
+    query = """
+    SELECT
+        rating, COUNT(rating)
+    FROM
+        users_rate_tb
+    GROUP BY
+        rating;
+    """
+
+    try:
+        with _get_db_connection() as conn:
+            if conn is None:
+                raise Exception("Database connection failed")
+
+            with conn.cursor() as cur:
+                cur.execute(query)
+                results = cur.fetchall()
+
+        counts_dict = {
+            "bad": 0,
+            "good": 0,
+            "excellent": 0
+        }
+        total_votes = 0
+
+        for row in results:
+            rating_name = row[0].lower()
+            count = row[1]
+            total_votes += count
+
+            if rating_name in counts_dict:
+                counts_dict[rating_name] = count
+
+        if total_votes == 0:
+            percentages_dict = {"bad": 0, "good": 0, "excellent": 0}
+        else:
+            percentages_dict = {
+                "bad": (
+                    round((counts_dict["bad"] / total_votes) * 100, 2)
+                ),
+                "good": (
+                    round((counts_dict["good"] / total_votes) * 100, 2)
+                ),
+                "excellent": (
+                    round((counts_dict["excellent"] / total_votes) * 100, 2)
+                )
+            }
+
+        return jsonify(percentages_dict), 200
+
+    except Exception as e:
+        logger.error(f"Database error getting ratings: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({"error": "Failed to get ratings"}), 500
 
 
 @app.get("/healthcheck/")
