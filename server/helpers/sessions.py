@@ -24,7 +24,7 @@ async def set_user_id(
         chat_user_id: str,
         username: str,
         client: redis.Redis,
-) -> str:
+) -> bytes:
     user_id = await _generate_user_id(username.encode())
     client.set(chat_user_id, user_id)
 
@@ -34,12 +34,12 @@ async def set_user_id(
 async def retrieve_user_id(
         chat_user_id: str,
         client: redis.Redis,
-) -> str | None:
+) -> bytes | None:
     user_id = client.get(chat_user_id)
     if user_id is not None:
-        return user_id.decode()
+        return user_id
 
-    return user_id
+    return None
 
 
 async def pop_user_id(chat_user_id: str, client: redis.Redis) -> None:

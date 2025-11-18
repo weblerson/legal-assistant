@@ -65,19 +65,19 @@ async def query() -> tuple[Response, int]:
     if not request_data:
         logger.error("Missing request data.")
 
-        return jsonify({"error": "Missing request data."}), 400
+        return jsonify({"response": "Missing request data."}), 400
 
     if "query" not in request_data:
         logger.error("Missing 'query' in request data")
         logger.error(f"Request data: {request_data}")
 
-        return jsonify({"error": "Missing request data."}), 400
+        return jsonify({"response": "Missing request data."}), 400
 
     if not request_data or "username" not in request_data or "user_id" not in request_data:
         logger.error("Missing request data")
         logger.error(f"Request data: {request_data}")
 
-        return jsonify({"error": "Missing request data."}), 400
+        return jsonify({"response": "Missing request data."}), 400
 
     logger.info(f"Received query: {request_data['query']}")
 
@@ -85,10 +85,21 @@ async def query() -> tuple[Response, int]:
     request_user_id = request_data["user_id"]
 
     # TODO: put these arguments into the environment
-    redis_client = await instantiate_redis_client("localhost", 6380)
-    user_id = await retrieve_user_id(request_user_id, redis_client)
-    if user_id is None:
-        user_id = await set_user_id(request_user_id, request_username, redis_client)
+    redis_host = os.environ["REDIS_HOST"]
+    redis_port = os.environ["REDIS_PORT"]
+
+    redis_client = await instantiate_redis_client(redis_host, int(redis_port))
+    user_id_bytes = await retrieve_user_id(request_user_id, redis_client)
+    if user_id_bytes is None:
+        user_id_bytes = await set_user_id(
+            request_user_id,
+            request_username,
+            redis_client,
+        )
+
+    user_id = user_id_bytes.decode("utf-8")
+    if user_id.startswith("b'") and user_id.endswith("'"):
+        user_id = user_id[2:-1]
 
     session_id = f"session://{user_id}"
 
@@ -180,7 +191,7 @@ async def query() -> tuple[Response, int]:
 
                 return jsonify(data), 200
 
-        response = {"error": "No final response received from agent."}
+        response = {"response": "No final response received from agent."}
 
         logger.warning("Runner finished without a final response event.")
         return jsonify(response), 500
@@ -243,7 +254,48 @@ async def query() -> tuple[Response, int]:
         # Catch-all for unexpected errors to ensure a tuple is always returned
         logger.error(f"Unexpected error: {e}")
         logger.error(traceback.format_exc())
-        return jsonify({"error": "An unexpected error occurred."}), 500
+        return jsonify({"response": f"An unexpected error occurred: {e}"}), 500
+
+
+@app.delete("/clear/")
+async def clear_session():
+    request_user_id = request.args.get("user_id")
+
+    redis_host = os.environ["REDIS_HOST"]
+    redis_port = os.environ["REDIS_PORT"]
+
+    redis_client = await instantiate_redis_client(redis_host, int(redis_port))
+    user_id_bytes = await retrieve_user_id(request_user_id, redis_client)
+    if user_id_bytes is None:
+        return jsonify(), 204
+
+    user_id = user_id_bytes.decode("utf-8")
+    if user_id.startswith("b'") and user_id.endswith("'"):
+        user_id = user_id[2:-1]
+
+    session_id = f"session://{user_id}"
+
+    db_url: str = current_app.config["DB_URL"]
+    app_name: str = current_app.config["APP_NAME"]
+    database_session_service = await instantiate_database_session_service(
+        db_url,
+    )
+
+    await pop_user_id(request_user_id, redis_client)
+
+    await delete_session_async(
+        database_session_service,
+        app_name,
+        user_id,
+        session_id,
+    )
+
+    return jsonify(), 200
+
+
+@app.get("/healthcheck/")
+async def healthcheck():
+    return jsonify({"status": "ok"}), 200
 
 
 if __name__ == "__main__":

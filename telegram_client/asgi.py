@@ -19,17 +19,6 @@ TOKEN = os.environ["BOT_TOKEN"]
 
 dp = Dispatcher()
 
-option_1 = KeyboardButton(text="Tope")
-option_2 = KeyboardButton(text="+500 aura")
-
-clear_session_button = KeyboardButton(text="/clear")
-
-reply_keyboard = ReplyKeyboardMarkup(
-    resize_keyboard=True,
-    input_field_placeholder="Limpar chat",
-    keyboard=[[clear_session_button]],
-)
-
 
 # TODO: add feedback buttons
 @dp.message(CommandStart())
@@ -53,8 +42,8 @@ async def command_clear_handler(message: Message) -> None:
     """
     This handler receives messages `/clear` command
     """
-
-    server_url = "http://localhost:5000/clear/"
+    server_host = os.environ["SERVER_HOST"]
+    server_url = f"{server_host}/clear/"
 
     httpx_headers = httpx.Headers(
         headers={
@@ -82,11 +71,8 @@ async def command_clear_handler(message: Message) -> None:
                 await message.answer(
                     "Sessão limpa! 🧹\nPodemos começar de novo.",
                 )
-            else:
-                # Tell the user it failed
-                await message.answer(
-                    "Ocorreu um erro ao tentar limpar a sessão no servidor.",
-                )
+            elif response.status_code == 204:
+                await message.answer("Sessão inexistente. Nada a fazer.")
 
         except httpx.ConnectError:
             await message.answer(
@@ -94,7 +80,6 @@ async def command_clear_handler(message: Message) -> None:
             )
 
 
-# TODO: implement session destruction handler
 @dp.message()
 async def question_handler(message: Message) -> None:
     """
@@ -103,7 +88,8 @@ async def question_handler(message: Message) -> None:
     and send back to the client the response.
     """
 
-    server_url = "http://localhost:5000/query/"
+    server_host = os.environ["SERVER_HOST"]
+    server_url = f"{server_host}/query/"
 
     httpx_headers = httpx.Headers(
         headers={
