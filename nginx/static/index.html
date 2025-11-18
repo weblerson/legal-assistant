@@ -79,18 +79,21 @@
             }
         });
 
-        // --- 2. Handle Button Click ---
+        performRequest();
+
         $('#btnLoadData').click(function() {
             const btn = $(this);
             btn.prop('disabled', true).text('Loading...');
 
-            // --- REAL BACKEND IMPLEMENTATION ---
+            performRequest()
+        });
+
+        function performRequest() {
             $.ajax({
-                url: '/api/get-ratings', // Your Python/Node endpoint
+                url: '/api/get-ratings',
                 method: 'GET',
                 dataType: 'json',
                 success: function(data) {
-                    // Expected data format: { "ruim": 10, "bom": 50, "excelente": 40 }
                     updateChart(data);
                 },
                 error: function(err) {
@@ -101,11 +104,9 @@
                     btn.prop('disabled', false).text('Load Backend Data');
                 }
             });
-        });
+        }
 
-        // --- 3. Update Logic ---
         function updateChart(data) {
-            // Map backend data to chart array order: [Ruim, Bom, Excelente]
             const newData = [
                 data.bad,
                 data.good,
