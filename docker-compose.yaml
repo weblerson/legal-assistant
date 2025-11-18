@@ -28,6 +28,8 @@ services:
       timeout: 10s
       retries: 5
       start_period: 60s
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
 
   telegram-client:
     container_name: telegram-client
