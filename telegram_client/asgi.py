@@ -5,11 +5,17 @@ import sys
 
 import httpx
 
-from aiogram import Bot, Dispatcher
+from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
-from aiogram.types import Message, KeyboardButton, ReplyKeyboardMarkup, MenuButton, BotCommand
+from aiogram.types import (
+    Message,
+    BotCommand,
+    InlineKeyboardMarkup,
+    InlineKeyboardButton,
+    CallbackQuery
+)
 
 from dotenv import load_dotenv
 
@@ -80,6 +86,91 @@ async def command_clear_handler(message: Message) -> None:
             )
 
 
+@dp.message(Command("rate"))
+async def show_rate(message: Message):
+    keyboard = InlineKeyboardMarkup(
+        inline_keyboard=[
+            [
+                InlineKeyboardButton(
+                    text="Ruim 😠",
+                    callback_data="rate_bad",
+                ),
+                InlineKeyboardButton(
+                    text="Boa 😐",
+                    callback_data="rate_good",
+                ),
+                InlineKeyboardButton(
+                    text="Excelente 🤩",
+                    callback_data="rate_excellent",
+                ),
+            ],
+            [
+                InlineKeyboardButton(
+                    text="Fechar ❌",
+                    callback_data="close_menu",
+                )
+            ]
+        ]
+    )
+
+    await message.answer("Avalie sua experiência!", reply_markup=keyboard)
+
+
+@dp.callback_query(F.data.startswith("rate_"))
+async def process_rating(callback: CallbackQuery):
+    rating_key = callback.data.split("_")[1]
+    rating_map = {
+        "bad": 1,
+        "good": 3,
+        "excellent": 5,
+    }
+
+    rating_value = rating_map.get(rating_key, 0)
+
+    request_user_id = callback.from_user.id
+
+    server_host = os.environ["SERVER_HOST"]
+    server_url = f"{server_host}/rate/"
+
+    payload = {
+        "request_user_id": request_user_id,
+        "rating": rating_value,
+    }
+    async with httpx.AsyncClient() as client:
+        try:
+            await callback.answer("Salvando...")
+
+            response = await client.post(
+                server_url,
+                json=payload,
+                timeout=10.0,
+            )
+
+            if response.status_code == 200:
+                await callback.message.edit_text(
+                    f"Obrigado! Nota <b>{rating_value}</b> registrada.",
+                    reply_markup=None,
+                )
+
+            else:
+                print(f"Server Error: {response.text}")
+                await callback.message.edit_text(
+                    "Erro ao salvar avaliação no servidor.",
+                )
+
+        except httpx.RequestError as e:
+            print(f"Connection Error: {e}")
+            await callback.message.edit_text(
+                "Erro de conexão ao salvar avaliação.",
+            )
+
+
+@dp.callback_query(F.data == "close_menu")
+async def close_menu(callback: CallbackQuery):
+    await callback.answer()
+    await callback.message.delete()
+
+
 @dp.message()
 async def question_handler(message: Message) -> None:
     """
@@ -123,7 +214,6 @@ async def question_handler(message: Message) -> None:
 
 
 async def main_async() -> None:
-    # Initialize Bot instance with default bot properties which will be passed to all API calls
     bot = Bot(
         token=TOKEN,
         default=DefaultBotProperties(parse_mode=ParseMode.HTML)
@@ -142,7 +232,6 @@ async def main_async() -> None:
 
     await bot.set_my_commands(commands)
 
-    # And the run events dispatching
     await dp.start_polling(bot)
 
 
