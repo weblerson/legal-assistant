@@ -1,5 +1,6 @@
 import os
 import logging
+import psycopg2
 
 from dotenv import load_dotenv
 from flask import (
@@ -26,6 +27,10 @@ from helpers.context_helpers import (
     ContextKey,
     get_context_var,
     set_context_var,
+)
+from helpers.db_helpers import (
+    get_db_connection_sync,
+    save_rating_sync,
 )
 from helpers.sessions import (
     instantiate_redis_client,
@@ -291,6 +296,59 @@ async def clear_session():
     )
 
     return jsonify(), 200
+
+
+@app.post("/rate/")
+async def rate_interaction():
+    request_data = request.get_json()
+
+    if not request_data or "request_user_id" not in request_data or "rating" not in request_data:
+        logger.error(f"Invalid rating data: {request_data}")
+        return jsonify({"error": "Missing user_id or rating"}), 400
+
+    request_user_id = request_data["request_user_id"]
+    rating = request_data["rating"]
+
+    try:
+        rating = int(rating)
+    except ValueError:
+        return jsonify({"error": "Rating must be an integer"}), 400
+
+    logger.info(f"Received rating {rating} from user {request_user_id}")
+
+    def _get_db_connection():
+        # TODO: host is not on the environment
+        return psycopg2.connect(
+            host="postgres",
+            database=os.environ["POSTGRES_DB"],
+            user=os.environ["POSTGRES_USER"],
+            password=os.environ["POSTGRES_PASSWORD"],
+            port=5432
+        )
+        # TODO: port is not too
+
+    upsert_query = """
+    INSERT INTO users_rate_tb (request_user_id, rating)
+    VALUES (%s, %s)
+    ON CONFLICT (request_user_id)
+    DO UPDATE SET
+        rating = EXCLUDED.rating,
+        updated_at = CURRENT_TIMESTAMP;
+    """
+
+    try:
+        with _get_db_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(upsert_query, (request_user_id, rating))
+            conn.commit()
+
+        return jsonify({"message": "Rating saved"}), 200
+
+    except Exception as e:
+        logger.error(f"Database error saving rating: {e}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return jsonify({"error": "Failed to save rating"}), 500
 
 
 @app.get("/healthcheck/")

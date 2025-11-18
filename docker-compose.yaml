@@ -59,6 +59,7 @@ services:
       test: redis-cli ping
 
   postgres:
+    container_name: legal-assistant-postgres
     image: postgres:15
     env_file:
       - ./.env
@@ -68,6 +69,7 @@ services:
       - POSTGRES_DB=${POSTGRES_DB}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./resources/init.sql:/docker-entrypoint-initdb.d/init.sql
     ports:
       - "5432:5432"
     networks:
