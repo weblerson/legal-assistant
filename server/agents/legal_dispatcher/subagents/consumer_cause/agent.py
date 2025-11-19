@@ -2,7 +2,7 @@ from google.adk.agents import LlmAgent
 
 root_agent = LlmAgent(
     name="ConsumerLawAgent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Agent to answer questions about the Brazilian consumer law.",
     instruction="""
         Your job is to answer questions about the consumer law to the user.

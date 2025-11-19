@@ -9,6 +9,7 @@ from aiogram import Bot, Dispatcher, F
 from aiogram.client.default import DefaultBotProperties
 from aiogram.enums import ParseMode
 from aiogram.filters import Command, CommandStart
+from aiogram.utils.chat_action import ChatActionSender
 from aiogram.types import (
     Message,
     BotCommand,
@@ -33,14 +34,15 @@ async def command_start_handler(message: Message) -> None:
     This handler receives messages with `/start` command
     """
 
-    start_message = (
-        "Olá! Sou o Assistente Legal!\n\n"
-        "Sinta-se livre para tirar qualquer dúvida sobre "
-        "o Código Civil, Código de Defesa do Consumidor "
-        "e Código da Consolidação das Leis do Trabalho!"
-    )
+    async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+        start_message = (
+            "Olá! Sou o Assistente Legal!\n\n"
+            "Sinta-se livre para tirar qualquer dúvida sobre "
+            "o Código Civil, Código de Defesa do Consumidor "
+            "e Código da Consolidação das Leis do Trabalho!"
+        )
 
-    await message.answer(start_message.strip())
+        await message.answer(start_message.strip())
 
 
 @dp.message(Command("clear"))
@@ -58,32 +60,33 @@ async def command_clear_handler(message: Message) -> None:
         }
     )
     httpx_timeout = httpx.Timeout(timeout=200.0, connect=5.0)
-    async with httpx.AsyncClient(
-        headers=httpx_headers,
-        timeout=httpx_timeout,
-    ) as httpx_async_client:
-        request_user_user_id = message.chat.id
+    async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+        async with httpx.AsyncClient(
+            headers=httpx_headers,
+            timeout=httpx_timeout,
+        ) as httpx_async_client:
+            request_user_user_id = message.chat.id
 
-        params = {
-            "user_id": request_user_user_id,
-        }
+            params = {
+                "user_id": request_user_user_id,
+            }
 
-        try:
-            response: httpx.Response = await httpx_async_client.delete(
-                server_url,
-                params=params,
-            )
-            if response.status_code == 200:
-                await message.answer(
-                    "Sessão limpa! 🧹\nPodemos começar de novo.",
+            try:
+                response: httpx.Response = await httpx_async_client.delete(
+                    server_url,
+                    params=params,
                 )
-            elif response.status_code == 204:
-                await message.answer("Sessão inexistente. Nada a fazer.")
+                if response.status_code == 200:
+                    await message.answer(
+                        "Sessão limpa! 🧹\nPodemos começar de novo.",
+                    )
+                elif response.status_code == 204:
+                    await message.answer("Sessão inexistente. Nada a fazer.")
 
-        except httpx.ConnectError:
-            await message.answer(
-                "Não consegui me conectar ao servidor para limpar a sessão.",
-            )
+            except httpx.ConnectError:
+                await message.answer(
+                    "Não consegui me conectar ao servidor para limpar a sessão.",
+                )
 
 
 @dp.message(Command("rate"))
@@ -189,28 +192,37 @@ async def question_handler(message: Message) -> None:
         }
     )
     httpx_timeout = httpx.Timeout(timeout=200.0, connect=5.0)
-    async with httpx.AsyncClient(
-        headers=httpx_headers,
-        timeout=httpx_timeout,
-    ) as httpx_async_client:
-        request_user_username = (
-            message.chat.first_name or message.chat.username
-        )
-        request_user_user_id = message.chat.id
+    async with ChatActionSender.typing(bot=message.bot, chat_id=message.chat.id):
+        async with httpx.AsyncClient(
+            headers=httpx_headers,
+            timeout=httpx_timeout,
+        ) as httpx_async_client:
+            request_user_username = (
+                message.chat.first_name or message.chat.username
+            )
+            request_user_user_id = message.chat.id
 
-        data = {
-            "query": message.text,
-            "username": request_user_username,
-            "user_id": request_user_user_id,
-        }
+            data = {
+                "query": message.text,
+                "username": request_user_username,
+                "user_id": request_user_user_id,
+            }
 
-        response: httpx.Response = await httpx_async_client.post(
-            server_url,
-            json=data
-        )
-        response_json = response.json()
+            try:
+                response: httpx.Response = await httpx_async_client.post(
+                    server_url,
+                    json=data
+                )
+                response.raise_for_status() # Raise exception for 4xx/5xx
+                response_json = response.json()
 
-        await message.answer(response_json["response"])
+                await message.answer(response_json["response"])
+
+            except httpx.ConnectError:
+                await message.answer("Erro: Não consegui conectar ao servidor.")
+            except Exception as e:
+                logging.error(f"Error processing query: {e}")
+                await message.answer("Ocorreu um erro ao processar sua mensagem.")
 
 
 async def main_async() -> None:
