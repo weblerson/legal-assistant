@@ -92,7 +92,7 @@ async def create_runner_async(
 async def create_root_agent_async() -> LlmAgent:
     root_agent = LlmAgent(
         name="LegalAssistant",
-        model="gemini-2.0-flash",
+        model="gemini-2.5-flash",
         instruction="""
             Route user requests:
             Use Civil Law Agent for questions about the Brazilian civil law,

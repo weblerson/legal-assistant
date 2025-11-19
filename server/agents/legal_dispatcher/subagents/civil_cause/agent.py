@@ -2,7 +2,7 @@ from google.adk.agents import Agent
 
 root_agent = Agent(
     name="CivilLawAgent",
-    model="gemini-2.0-flash",
+    model="gemini-2.5-flash",
     description="Agent to answer questions about the Brazilian civil law.",
     instruction="""
         Your job is to answer questions about the civil law to the user.
